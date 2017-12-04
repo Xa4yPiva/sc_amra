@@ -1,8 +1,8 @@
-function [aNorm, aCentNorm] = SubCoeffsA(signalHilb)
+function [aNorm, aCentNorm] = SubCoeffsA(envelope)
 %SUBCOEFFSA Summary of this function goes here
 %   Detailed explanation goes here
 
-a = abs(signalHilb);
+a = abs(envelope);
 aMean = mean(a);
 aNorm = a / aMean;
 aCentNorm = aNorm - 1;
