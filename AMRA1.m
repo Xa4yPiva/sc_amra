@@ -1,28 +1,38 @@
-function [decision] = AMRA1(P, yMax, sAP, sDP, threshP, threshY, threshSap, threshSdp)
+function [decision] = AMRA1(keyFeatures, thresholds)
 %AMRA1 Summary of this function goes here
 %   Detailed explanation goes here
 
-absP = abs(P);
+kf = keyFeatures;
+thresh = thresholds;
+absP = abs(kf.P);
 
-if (sDP < threshSdp)
-    if (absP < threshP)
+if (kf.sigmaDP < thresh.sigmaDP)
+    if (absP < thresh.P / 2)
         decision = "AM";
     else
-        decision = "VSB";
+        if (kf.P > 0)
+            decision = "LVSB";
+        else
+            decision = "UVSB";
+        end
     end
 else
-    if (absP < threshP)
-        if (yMax < threshY)
-            decision = "FM";
+    if (absP < thresh.P)
+        if (kf.gammaMax < thresh.gammaMax)
+            if (kf.sigmaAP > thresh.sigmaAP)
+                decision = "FM";
+            else
+                decision = "Unknown";
+            end
         else
-            if (sAP < threshSap)
+            if (kf.sigmaAP < thresh.sigmaAP)
                 decision = "DSB";
             else
                 decision = "Combined";
             end
         end
     else
-        if (P > 0)
+        if (kf.P > 0)
             decision = "LSB";
         else
             decision = "USB";

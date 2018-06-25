@@ -1,15 +1,17 @@
-function [decision] = AMRA2(P, yMax, sAP, sDP, threshP, threshY, threshSap, threshSdp)
+function [decision] = AMRA2(keyFeatures, thresholds)
 %AMRA2 Summary of this function goes here
 %   Detailed explanation goes here
 
-absP = abs(P);
+kf = keyFeatures;
+thresh = thresholds;
+absP = abs(kf.P);
 
-if (yMax < threshY)
+if (kf.gammaMax < thresh.gammaMax)
    decision = "FM";
 else
-    if (sAP < threshSap)
-        if (sDP < threshSdp)
-            if (absP < threshP)
+    if (kf.sigmaAP < thresh.sigmaAP)
+        if (kf.sigmaDP < thresh.sigmaDP)
+            if (absP < thresh.P)
                 decision = "AM";
             else
                 decision = "VSB";
@@ -18,7 +20,7 @@ else
             decision = "DSB";
         end
     else
-        if (absP < threshP)
+        if (absP < thresh.P)
             decision = "Combined";
         else
             if (P < 0)

@@ -1,15 +1,17 @@
-function [decision] = AMRA4(P, yMax, sAP, sDP, threshP, threshY, threshSap, threshSdp)
+function [decision] = AMRA4(keyFeatures, thresholds)
 %AMRA4 Summary of this function goes here
 %   Detailed explanation goes here
 
-absP = abs(P);
+kf = keyFeatures;
+thresh = thresholds;
+absP = abs(kf.P);
 
-if (absP < threshP)
-    if (yMax < threshY)
+if (absP < thresh.P)
+    if (kf.gammaMax < thresh.gammaMax)
         decision = "FM";
     else
-        if (sAP < threshSap)
-            if (sDP < threshSdp)
+        if (kf.sigmaAP < thresh.sigmaAP)
+            if (kf.sigmaDP < thresh.sigmaDP)
                 decision = "AM";
             else
                 decision = "DSB";
@@ -19,10 +21,10 @@ if (absP < threshP)
         end
     end
 else
-    if (P > 0)
+    if (kf.P > 0)
         decision = "LSB";
     else
-        if (sAP < threshSap)
+        if (kf.sigmaAP < thresh.sigmaAP)
             decision = "VSB";
         else
             decision = "USB";

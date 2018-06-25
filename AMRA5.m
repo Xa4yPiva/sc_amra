@@ -1,27 +1,29 @@
-function [decision] = AMRA5(P, yMax, sAP, sDP, threshP, threshY, threshSap, threshSdp)
+function [decision] = AMRA5(keyFeatures, thresholds)
 %AMRA5 Summary of this function goes here
 %   Detailed explanation goes here
 
-absP = abs(P);
+kf = keyFeatures;
+thresh = thresholds;
+absP = abs(kf.P);
 
-if (sDP < threshSdp)
-    if (absP < threshP)
+if (kf.sigmaDP < thresh.sigmaDP)
+    if (absP < thresh.P)
         decision = "AM";
     else
         decision = "VSB";
     end
 else
-    if (yMax < threshY)
+    if (kf.gammaMax < thresh.gammaMax)
         decision = "FM";
     else
-        if (absP < threshP)
-           if (sAP < threshSap)
+        if (absP < thresh.P)
+           if (kf.sigmaAP < thresh.sigmaAP)
                decision = "DSB";
            else
                decision = "Combined";
            end
         else
-            if (P < 0)
+            if (kf.P < 0)
                 decision = "USB";
             else
                 decision = "LSB";

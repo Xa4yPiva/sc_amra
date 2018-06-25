@@ -1,15 +1,17 @@
-function [decision] = AMRA3(P, yMax, sAP, sDP, threshP, threshY, threshSap, threshSdp)
+function [decision] = AMRA3(keyFeatures, thresholds)
 %AMRA3 Summary of this function goes here
 %   Detailed explanation goes here
 
-absP = abs(P);
+kf = keyFeatures;
+thresh = thresholds;
+absP = abs(kf.P);
 
-if (yMax < threshY)
+if (kf.gammaMax < thresh.gammaMax)
     decision = "FM";
 else
-    if (sAP < threshSap)
-        if (absP < threshP)
-            if (sDP < threshSdp)
+    if (kf.sigmaAP < thresh.sigmaAP)
+        if (absP < thresh.P)
+            if (kf.sigmaDP < thresh.sigmaDP)
                 decision = "AM";
             else
                 decision = "DSB";
@@ -18,10 +20,10 @@ else
             decision = "VSB";
         end
     else
-        if (absP < threshP)
+        if (absP < thresh.P)
             decision = "Combined";
         else
-            if (P < 0)
+            if (kf.P < 0)
                 decision = "USB";
             else
                 decision = "LSB";
