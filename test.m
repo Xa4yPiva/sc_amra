@@ -1,4 +1,5 @@
 addpath(genpath('../common'));
+addpath(genpath('../matlab_utils'));
 clear;
 close all;
 
