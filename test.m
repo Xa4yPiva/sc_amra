@@ -1,4 +1,4 @@
-addpath(genpath('../common'));
+addpath(genpath('../sc_common'));
 addpath(genpath('../matlab_utils'));
 clear;
 close all;
@@ -6,33 +6,32 @@ close all;
 
 %% Signal
 fs0 = 12e3;
-T = 0.1;
+T = 1;
 fLowHz = 300;
 fHighHz = 3600;
 bandHz = fHighHz - fLowHz;
 data = RandomBandLimitedSignal(fs0, T, 20, fLowHz, fHighHz, 4000, 60, 1, 60, 'uniform');
 data1 = RandomBandLimitedSignal(fs0, T, 20, fLowHz, fHighHz/2, 4000/2, 60, 1, 60, 'uniform');
-fs = 1200e3;
+fs = 200e3;
 factor = fs / fs0;
 [p, q] = rat(factor);
-data = resample(data, p, q);
-data1 = resample(data1, p, q);
+x = resample(data, p, q);
+x1 = resample(data1, p, q);
 lenFrame = 8192;
-framesNum = floor(length(data) / lenFrame);
-x = data;
-x1 = data1;
+framesNum = floor(length(x) / lenFrame);
 lenSignal = length(x);
 N = 2 ^ nextpow2(lenSignal);
 fc = 60e3;
 dt = 1 / fs;
 t = (0 : lenSignal-1) * dt;
+% x = cos(2*pi*(fc/100)*t);
 f = (-N/2 : (N-1)/2) * fs / N;
 specX = fftshift(abs(fft(x, N))) / (N/2);
 
 offset = exp(1i * 2*pi*fc * t);
 
 %% Modulation
-mAM = 0.5;
+mAM = 0.3;
 xAM = ammod(mAM * x, fc, fs, 0, 0.5);
 specAM = fftshift(abs(fft(xAM, N))) / (N/2);
 xDSB = ammod(x, fc, fs, 0, 0);
@@ -46,7 +45,7 @@ fDev = 25e3;
 xFM = fmmod(x, fc, fs, fDev);
 specFM = fftshift(abs(fft(xFM, N))) / (N/2);
 mComb = 0.5;
-xComb = (1 + mComb*x1) .* xFM;
+xComb = (0.5 + mComb*x1) .* xFM;
 specComb = fftshift(abs(fft(xComb, N))) / (N/2);
 
 uvsbFilterSpec = fdesign.highpass('N,Fc,Ast,Ap', 1000, fc, 60, 1, fs);
@@ -101,29 +100,58 @@ specLVSB = fftshift(abs(fft(xLVSB, N))) / (N/2);
 % subplot(2,1,1); plot(f, mag2db(specFM));   grid on; xlabel('f, Hz'); ylabel('|S(f)|, dB'); xlim([fc-2*fDev, fc+2*fDev]); title('FM');
 % subplot(2,1,2); plot(f, mag2db(specComb)); grid on; xlabel('f, Hz'); ylabel('|S(f)|, dB'); xlim([fc-2*fDev, fc+2*fDev]); title('Combined (FM + AM)');
 % figure(5); set(gcf, 'color', 'w');
-% subplot(2,1,1); plot(f, mag2db(specUVSB)); grid on; xlabel('f, Hz'); ylabel('|S(f)|, dB'); xlim([fc-5000, fc+5000]); title('LVSB');
-% subplot(2,1,2); plot(f, mag2db(specLVSB)); grid on; xlabel('f, Hz'); ylabel('|S(f)|, dB'); xlim([fc-5000, fc+5000]); title('UVSB');
+% subplot(2,1,1); plot(f, mag2db(specLVSB)); grid on; xlabel('f, Hz'); ylabel('|S(f)|, dB'); xlim([fc-5000, fc+5000]); title('LVSB');
+% subplot(2,1,2); plot(f, mag2db(specUVSB)); grid on; xlabel('f, Hz'); ylabel('|S(f)|, dB'); xlim([fc-5000, fc+5000]); title('UVSB');
+% return;
+
+%% Signals, Decisions
+fs2 = 80e3;
+factor = fs2 / fs;
+[p, q] = rat(factor);
+
+bandSignalMod = 3300;
+% signals = [xAM; xDSB; xLSB; xUSB; xLVSB; xUVSB; xFM; xComb];
+% signals = [xAM; xDSB; xLSB; xUSB; xLVSB; xUVSB; xFM];
+signals = [xAM; xDSB; xLSB; xUSB; xFM];
+% bandsHz = [2*fHighHz, 2*fHighHz, bandHz, bandHz, 1.2*bandHz, 1.2*bandHz, 2*fDev, 2*fDev];
+sigsNum = min(size(signals));
+% decRight = ["AM", "DSB", "LSB", "USB", "LVSB", "UVSB", "FM", "Combined"];
+decRight = ["AM", "DSB", "LSB", "USB", "FM"];
+mType = ['x', '*', 's', '^', 'p', 'h', 'o', 'd'];
+envelopes = zeros(size(signals));
+% energies = zeros(1, sigsNum);
+for i = 1 : size(envelopes, 1)
+    envelopes(i, :) = hilbert(signals(i, :)) .* conj(offset);
+%     energies(i) = sum(abs(envelopes(i, :)) .^ 2) / fs;
+%     envelopes(i, :) = envelopes(i, :) / sqrt(energies(i));
+end
+envelopes = (resample(envelopes', p, q))';
+info = resample(x, p, q);
 
 %% Envelope
 % signal = awgn(xDSB, 10);
-signal = xFM(328 : 328 + lenFrame-1);
-envel = hilbert(signal) .* conj(offset(1 : lenFrame));
-envel = awgn(envel, 10, 'measured');
-specSig = fftshift(abs(fft(signal, N))) / (N/2);
+lenFrame = 4096;
+% signal = xFM(328 : 328 + lenFrame-1);
+
+N = 2 ^ nextpow2(size(envelopes, 2));
+f = (-N/2 : (N-1)/2) * fs2 / N;
+envel = envelopes(2,:);
+envel = awgn(envel, 0, 'measured');
 specEnv = fftshift(abs(fft(envel, N))) / (N/2);
 % figure(5);
-% subplot(2,1,1); plot(f, mag2db(specSig)); grid on;
-% subplot(2,1,2); plot(f, mag2db(specEnv)); grid on;
+% subplot(3,1,1); plot(real(info(328 : 328 + lenFrame))); grid on;
+% subplot(3,1,2); plot(abs(envel(328 : 328 + lenFrame))); grid on;
+% subplot(3,1,3); plot(f, mag2db(specEnv)); grid on;
 
 %% AMRA OneShotTest
 % Dirty hardcode! Compute threshold or something!
 thresholds.ampl = 1;
-thresholds.P = 0.5;
-thresholds.gammaMax = 5.5;
+thresholds.P = 0.2;
+thresholds.gammaMax = 0.6e-3;
 thresholds.sigmaAP = pi/4;
-thresholds.sigmaDP = pi/3;
+thresholds.sigmaDP = pi/2 * 0.9;
 
-kf = KeyFeatures(envel, thresholds.ampl);
+kf = KeyFeatures(envel(328 : 328 + lenFrame), thresholds.ampl);
 
 amra1 = AMRA1(kf, thresholds);
 % amra2 = AMRA2(kf, thresholds);
@@ -137,36 +165,58 @@ fprintf("amra1 = " + amra1 + "\n");
 % fprintf("amra3 = " + amra3 + "\n");
 % fprintf("amra4 = " + amra4 + "\n");
 % fprintf("amra5 = " + amra5 + "\n");
-
-%% Signals, Decisions
-bandSignalMod = 3300;
-signals = [xAM; xDSB; xLSB; xUSB; xLVSB; xUVSB; xFM; xComb];
-bandsHz = [2*fHighHz, 2*fHighHz, bandHz, bandHz, 1.2*bandHz, 1.2*bandHz, 2*fDev, 2*fDev];
-sigsNum = min(size(signals));
-decRight = ["AM", "DSB", "LSB", "USB", "LVSB", "UVSB", "FM", "Combined"];
-mType = ['x', '*', 's', '^', 'p', 'h', 'o', 'd'];
+% return;
 
 %% Probability of right decision
-envelopes = zeros(sigsNum, lenSignal);
-energies = zeros(1, sigsNum);
-for i = 1 : sigsNum
-    envelopes(i, :) = hilbert(signals(i, :)) .* conj(offset);
-%     energies(i) = sum(abs(envelopes(i, :)) .^ 2) / fs;
-%     envelopes(i, :) = envelopes(i, :) / sqrt(energies(i));
-end
-SNR = (-8 : 1 : 10);
-expNum = 100;
-pRight = ProbRightDecision(envelopes, thresholds, decRight, SNR, expNum, lenFrame);
+snr = (-15 : 2 : 10);
+% snr = (-10 : 1 : 5);
+expNum = 1000;
+% gMax = (0.4 : 0.2 : 1.6) * 1e-3;
+% sAP = (0.5 : 0.1 : 1);
+% sDP = (1 : 0.1 : 1.7);
+% P = (0.2 : 0.1 : 0.5);
+clear pro;
+% for i = 1 : length(gMax)
+%     t = thresholds;
+%     t.gammaMax = gMax(i);
+%     tNames(i) = strcat("\gamma_{max} = ", num2str(gMax(i)));
+%     [pRight, pro(i,:)] = ProbRightDecision(envelopes, t, decRight, snr, expNum, lenFrame);
+% end
+% for i = 1 : length(sAP)
+%     t = thresholds;
+%     t.sigmaAP = sAP(i);
+%     tNames(i) = strcat("\sigma_{ap} = ", num2str(sAP(i)));
+%     [pRight, pro(i,:)] = ProbRightDecision(envelopes, t, decRight, snr, expNum, lenFrame);
+% end
+% for i = 1 : length(sDP)
+%     t = thresholds;
+%     t.sigmaDP = sDP(i);
+%     tNames(i) = strcat("\sigma_{ap} = ", num2str(sDP(i)));
+%     [pRight, pro(i,:)] = ProbRightDecision(envelopes, t, decRight, snr, expNum, lenFrame);
+% end
+% for i = 1 : length(sDP)
+%     t = thresholds;
+%     t.sigmaDP = sDP(i);
+%     tNames(i) = strcat("\sigma_{ap} = ", num2str(sDP(i)));
+%     [pRight, pro(i,:)] = ProbRightDecision(envelopes, t, decRight, snr, expNum, lenFrame);
+% end
+% for i = 1 : length(P)
+%     t = thresholds;
+%     t.P = P(i);
+%     tNames(i) = strcat("P = ", num2str(P(i)));
+%     [pRight, pro(i,:)] = ProbRightDecision(envelopes, t, decRight, snr, expNum, lenFrame);
+% end
+[pRight, pro] = ProbRightDecision(envelopes, thresholds, decRight, snr, expNum, lenFrame);
+tNames = [];
 
-figure(6);
-for i = 1 : sigsNum
-    plot(SNR, pRight(i,:), 'marker', mType(i), 'markersize', 10, 'linewidth', 2);
-    hold on;
-end
-grid on;
-title('AMRA1'); xlabel('SNR, dB'); ylabel('Probability of right decision');
-legend(decRight, 'location', 'northwest'); legend('show');
-set(gcf, 'color', 'w'); set(groot, 'DefaultAxesFontSize', 18);
+%% Plot pPright
+close all;
+PlotProbRight([6,7], pRight, pro, snr, mType, decRight, tNames);
+
+%% Plot pErr
+pErr = 1 - pRight;
+peo = 1 - pro;
+PlotProbError([8,9], pErr, peo, snr, mType, decRight, tNames);
 
 %% Offset Test
 % modulation = "Combined";
@@ -232,131 +282,180 @@ set(gcf, 'color', 'w'); set(groot, 'DefaultAxesFontSize', 18);
 % set(groot, 'DefaultAxesFontSize', 18); set(gcf, 'color', 'w');
 
 %% Weights
-modulation = "AM";
-idxRight = find(decRight == modulation);
-envelope = hilbert(signals(idxRight, :)) .* conj(offset);
+% modulation = "AM";
+% idxRight = find(decRight == modulation);
+% envelope = hilbert(signals(idxRight, :)) .* conj(offset);
+% 
+% snr = [-2.5, -5, 0.5, 0.5, 5, 5, 0, 2];
+% lenFrame = 8192;
+% 
+% weights = zeros(sigsNum, sigsNum);
+% for i = 1 : sigsNum
+%     envelope = hilbert(signals(i, :)) .* conj(offset);
+%     weights(i,:) = ComputeWeights(envelope, thresholds, decRight, snr(i), lenFrame);
+% end
+% 
+% sigs = categorical({'1.AM', '2.DSB', '3.LSB', '4.USB', '5.LVSB', '6.UVSB', '7.FM', '8.Combined'});
+% colors = lines(8);
+% 
+% % AM, DSB, SSB
+% figure(8); set(gcf, 'color', 'w');
+% subplot(2,2,1);
+% idx = find(decRight == "AM");
+% hold on;
+% for i = 1 : sigsNum
+%     h = bar(sigs(i), weights(idx,i));
+%     set(h, 'facecolor', colors(i,:));
+% end
+% hold off;
+% grid on; ylim([0, 1]); ylabel('Weight');
+% title(strcat(decRight(idx), ", SNR = ", num2str(snr(idx)), " dB"));
+% 
+% subplot(2,2,2);
+% idx = find(decRight == "DSB");
+% hold on;
+% for i = 1 : sigsNum
+%     h = bar(sigs(i), weights(idx,i));
+%     set(h, 'facecolor', colors(i,:));
+% end
+% hold off;
+% grid on; ylim([0, 1]); ylabel('Weight');
+% title(strcat(decRight(idx), ", SNR = ", num2str(snr(idx)), " dB"));
+% 
+% subplot(2,2,3);
+% idx = find(decRight == "LSB");
+% hold on;
+% for i = 1 : sigsNum
+%     h = bar(sigs(i), weights(idx,i));
+%     set(h, 'facecolor', colors(i,:));
+% end
+% hold off;
+% grid on; ylim([0, 1]); ylabel('Weight');
+% title(strcat(decRight(idx), ", SNR = ", num2str(snr(idx)), " dB"));
+% 
+% subplot(2,2,4);
+% idx = find(decRight == "USB");
+% hold on;
+% for i = 1 : sigsNum
+%     h = bar(sigs(i), weights(idx,i));
+%     set(h, 'facecolor', colors(i,:));
+% end
+% hold off;
+% grid on; ylim([0, 1]); ylabel('Weight');
+% title(strcat(decRight(idx), ", SNR = ", num2str(snr(idx)), " dB"));
+% 
+% % VSB, FM, Combined
+% figure(9); set(gcf, 'color', 'w');
+% subplot(2,2,1);
+% idx = find(decRight == "LVSB");
+% hold on;
+% for i = 1 : sigsNum
+%     h = bar(sigs(i), weights(idx,i));
+%     set(h, 'facecolor', colors(i,:));
+% end
+% hold off;
+% grid on; ylim([0, 1]); ylabel('Weight');
+% title(strcat(decRight(idx), ", SNR = ", num2str(snr(idx)), " dB"));
+% 
+% subplot(2,2,2);
+% idx = find(decRight == "UVSB");
+% hold on;
+% for i = 1 : sigsNum
+%     h = bar(sigs(i), weights(idx,i));
+%     set(h, 'facecolor', colors(i,:));
+% end
+% hold off;
+% grid on; ylim([0, 1]); ylabel('Weight');
+% title(strcat(decRight(idx), ", SNR = ", num2str(snr(idx)), " dB"));
+% 
+% subplot(2,2,3);
+% idx = find(decRight == "FM");
+% hold on;
+% for i = 1 : sigsNum
+%     h = bar(sigs(i), weights(idx,i));
+%     set(h, 'facecolor', colors(i,:));
+% end
+% hold off;
+% grid on; ylim([0, 1]); ylabel('Weight');
+% title(strcat(decRight(idx), ", SNR = ", num2str(snr(idx)), " dB"));
+% 
+% subplot(2,2,4);
+% idx = find(decRight == "Combined");
+% hold on;
+% for i = 1 : sigsNum
+%     h = bar(sigs(i), weights(idx,i));
+%     set(h, 'facecolor', colors(i,:));
+% end
+% hold off;
+% grid on; ylim([0, 1]); ylabel('Weight');
+% title(strcat(decRight(idx), ", SNR = ", num2str(snr(idx)), " dB"));
+% % % R2017b only
+% % bar_child = get(bar_h, 'Children');
+% % mydata=1:sigsNum;
+% % set(bar_child, 'CData', mydata);
 
-snr = [-2.5, -5, 0.5, 0.5, 5, 5, 0, 2];
-lenFrame = 8192;
-% framesNum = floor(lenSignal / lenFrame);
-% w = zeros(1, sigsNum);
-% cyclesNum = framesNum;
+%% KeyFeatures_vs_SNR
+% snr = -10 : 1 : 20;
+% expNum = 10;
+% P = zeros(sigsNum, length(snr));
+% yMax = zeros(sigsNum, length(snr));
+% sAP = zeros(sigsNum, length(snr));
+% sDP = zeros(sigsNum, length(snr));
 % iteration = 0;
 % h = waitbar(0, 'Computing...');
-% for i = 1 : framesNum
-%     env = envelope((i-1)*lenFrame+1 : i*lenFrame);
-%     env = awgn(env, snr, 'measured');
-%     kf = KeyFeatures(env, thresholds.ampl);
-%     decision = AMRA1(kf, thresholds);
-%     idx = find(decRight == decision);
-%     w(idx) = w(idx) + 1;
-%     iteration = iteration + 1;
-%     waitbar(iteration / cyclesNum);
+% cyclesNum = length(snr) * sigsNum * expNum;
+% for i = 1 : sigsNum
+%     for j = 1 : length(snr)
+%         for k = 1 : expNum
+% %             kf(k) = KeyFeatures(awgn(envelope(1 : lenFrame), snr(i)), thresholds.ampl);
+%             kf(k) = KeyFeatures(awgn(envelopes(i, lenFrame+1:2*lenFrame), snr(i)), thresholds.ampl);
+%             iteration = iteration + 1;
+%             waitbar(iteration / cyclesNum);
+%         end
+%         P(i, j) = mean([kf.P]);
+%         yMax(i, j) = mean([kf.gammaMax]);
+%         sAP(i, j) = mean([kf.sigmaAP]);
+%         sDP(i, j) = mean([kf.sigmaDP]);
+%     end
 % end
 % close(h);
-% weights = w / framesNum;
-
-weights = zeros(sigsNum, sigsNum);
-for i = 1 : sigsNum
-    envelope = hilbert(signals(i, :)) .* conj(offset);
-    weights(i,:) = ComputeWeights(envelope, thresholds, decRight, snr(i), lenFrame);
-end
-
-sigs = categorical({'1.AM', '2.DSB', '3.LSB', '4.USB', '5.LVSB', '6.UVSB', '7.FM', '8.Combined'});
-colors = lines(8);
-
-% AM, DSB
-figure(8); set(gcf, 'color', 'w');
-subplot(1,2,1);
-idx = find(decRight == "AM");
-hold on;
-for i = 1 : sigsNum
-    h = bar(sigs(i), weights(idx,i));
-    set(h, 'facecolor', colors(i,:));
-end
-hold off;
-grid on; ylim([0, 1]); ylabel('Weight');
-title(strcat(decRight(idx), ", SNR = ", num2str(snr(idx)), " dB"));
-subplot(1,2,2);
-idx = find(decRight == "DSB");
-hold on;
-for i = 1 : sigsNum
-    h = bar(sigs(i), weights(idx,i));
-    set(h, 'facecolor', colors(i,:));
-end
-hold off;
-grid on; ylim([0, 1]); ylabel('Weight');
-title(strcat(decRight(idx), ", SNR = ", num2str(snr(idx)), " dB"));
-
-% SSB
-figure(9); set(gcf, 'color', 'w');
-subplot(1,2,1);
-idx = find(decRight == "LSB");
-hold on;
-for i = 1 : sigsNum
-    h = bar(sigs(i), weights(idx,i));
-    set(h, 'facecolor', colors(i,:));
-end
-hold off;
-grid on; ylim([0, 1]); ylabel('Weight');
-title(strcat(decRight(idx), ", SNR = ", num2str(snr(idx)), " dB"));
-subplot(1,2,2);
-idx = find(decRight == "USB");
-hold on;
-for i = 1 : sigsNum
-    h = bar(sigs(i), weights(idx,i));
-    set(h, 'facecolor', colors(i,:));
-end
-hold off;
-grid on; ylim([0, 1]); ylabel('Weight');
-title(strcat(decRight(idx), ", SNR = ", num2str(snr(idx)), " dB"));
-
-% VSB
-figure(10); set(gcf, 'color', 'w');
-subplot(1,2,1);
-idx = find(decRight == "LVSB");
-hold on;
-for i = 1 : sigsNum
-    h = bar(sigs(i), weights(idx,i));
-    set(h, 'facecolor', colors(i,:));
-end
-hold off;
-grid on; ylim([0, 1]); ylabel('Weight');
-title(strcat(decRight(idx), ", SNR = ", num2str(snr(idx)), " dB"));
-subplot(1,2,2);
-idx = find(decRight == "UVSB");
-hold on;
-for i = 1 : sigsNum
-    h = bar(sigs(i), weights(idx,i));
-    set(h, 'facecolor', colors(i,:));
-end
-hold off;
-grid on; ylim([0, 1]); ylabel('Weight');
-title(strcat(decRight(idx), ", SNR = ", num2str(snr(idx)), " dB"));
-        
-% FM, Combined
-figure(11); set(gcf, 'color', 'w');
-subplot(1,2,1);
-idx = find(decRight == "FM");
-hold on;
-for i = 1 : sigsNum
-    h = bar(sigs(i), weights(idx,i));
-    set(h, 'facecolor', colors(i,:));
-end
-hold off;
-grid on; ylim([0, 1]); ylabel('Weight');
-title(strcat(decRight(idx), ", SNR = ", num2str(snr(idx)), " dB"));
-subplot(1,2,2);
-idx = find(decRight == "Combined");
-hold on;
-for i = 1 : sigsNum
-    h = bar(sigs(i), weights(idx,i));
-    set(h, 'facecolor', colors(i,:));
-end
-hold off;
-grid on; ylim([0, 1]); ylabel('Weight');
-title(strcat(decRight(idx), ", SNR = ", num2str(snr(idx)), " dB"));
-% % R2017b only
-% bar_child = get(bar_h, 'Children');
-% mydata=1:sigsNum;
-% set(bar_child, 'CData', mydata);
+% 
+% figure(13);
+% for i = 1 : sigsNum
+%     hold on;
+%     plot(snr, P(i, :), 'marker', mType(i), 'markersize', 10, 'linewidth', 2);
+% end
+% grid on;
+% xlabel('SNR, dB'); ylabel('Key Feature P');
+% legend(decRight); legend('show');
+% set(groot, 'DefaultAxesFontSize', 18); set(gcf, 'color', 'w');
+% 
+% figure(14);
+% for i = 1 : sigsNum
+%     plot(snr, yMax(i, :), 'marker', mType(i), 'markersize', 10, 'linewidth', 2);
+%     hold on;
+% end
+% grid on;
+% xlabel('SNR, dB'); ylabel('Key Feature \gamma _{max}');
+% legend(decRight); legend('show');
+% set(groot, 'DefaultAxesFontSize', 18); set(gcf, 'color', 'w');
+% 
+% figure(15);
+% for i = 1 : sigsNum
+%     hold on;
+%     plot(snr, sAP(i, :), 'marker', mType(i), 'markersize', 10, 'linewidth', 2);
+% end
+% grid on;
+% xlabel('SNR, dB'); ylabel('Key Feature \sigma _{ap}');
+% legend(decRight); legend('show');
+% set(groot, 'DefaultAxesFontSize', 18); set(gcf, 'color', 'w');
+% 
+% figure(16);
+% for i = 1 : sigsNum
+%     hold on;
+%     plot(snr, sDP(i, :), 'marker', mType(i), 'markersize', 10, 'linewidth', 2);
+% end
+% grid on;
+% xlabel('SNR, dB'); ylabel('Key Feature \sigma _{dp}');
+% legend(decRight); legend('show');
+% set(groot, 'DefaultAxesFontSize', 18); set(gcf, 'color', 'w');
