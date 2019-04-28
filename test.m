@@ -151,9 +151,13 @@ thresholds.gammaMax = 0.6e-3;
 thresholds.sigmaAP = pi/4;
 thresholds.sigmaDP = pi/2 * 0.9;
 
-kf = KeyFeatures(envel(328 : 328 + lenFrame), thresholds.ampl);
-
+tic
+% kf = KeyFeatures(envel(328 : 328 + lenFrame), thresholds.ampl);
+lf = 2^16;
+kf = KeyFeatures(envel, thresholds.ampl);
 amra1 = AMRA1(kf, thresholds);
+toc
+return
 % amra2 = AMRA2(kf, thresholds);
 % amra3 = AMRA3(kf, thresholds);
 % amra4 = AMRA4(kf, thresholds);
